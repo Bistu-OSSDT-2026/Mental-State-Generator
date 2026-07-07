@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>精神状态生成器 · BISTU</title>
+  <!-- Tailwind via CDN (lightweight) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 配置 Tailwind 暗色模式为 class 模式，与手动 .dark class 同步 -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    };
+  </script>
+  <style>
+    /* 自定义变量 & 暗色模式切换 */
+    :root {
+      --bg-main: #ffffff;
+      --bg-card: #f8f9fa;
+      --text-color: #222222;
+      --border-color: #e5e7eb;
+    }
+    .dark {
+      --bg-main: #1a1a22;
+      --bg-card: #2c2c3a;
+      --text-color: #f1f1f1;
+      --border-color: #444455;
+    }
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-color);
+      transition: background-color 0.25s ease, color 0.2s;
+    }
+    .card-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      transition: background 0.2s, border 0.2s;
+    }
+    /* 水印 (右下角固定) */
+    .bistu-watermark {
+      position: fixed;
+      bottom: 16px;
+      right: 20px;
+      font-size: 20px;
+      letter-spacing: 4px;
+      color: rgba(120, 120, 120, 0.25);
+      font-weight: bold;
+      pointer-events: none;
+      user-select: none;
+      z-index: 9999;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .canvas-container {
+      position: relative;
+    }
+    /* 小屏适配 */
+    @media (max-width: 640px) {
+      .bistu-watermark {
+        font-size: 14px;
+        bottom: 8px;
+        right: 12px;
+      }
+    }
+    /* 模拟贴纸颜色块 */
+    .sticker-dot {
+      transition: 0.1s ease;
+      border: 2px solid transparent;
+    }
+    .sticker-dot:hover {
+      border-color: #6b8cff;
+      transform: scale(0.96);
+    }
+    .sticker-dot.active {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px #bfdbfe;
+    }
+    /* 分类按钮活跃态 */
+    .cate-item.active {
+      background-color: #dbeafe;
+      color: #1e3a8a;
+      font-weight: 500;
+    }
+    .dark .cate-item.active {
+      background-color: #334155;
+      color: #b9d0ff;
+    }
+    /* 滚动条美观 */
+    #collectList::-webkit-scrollbar {
+      width: 4px;
+    }
+    #collectList::-webkit-scrollbar-thumb {
+      background: #b0b0c0;
+      border-radius: 8px;
+    }
+    textarea, select, input {
+      background-color: var(--bg-card);
+      color: var(--text-color);
+      border-color: var(--border-color);
+    }
+    .dark textarea, .dark select, .dark input {
+      background-color: #2a2a38;
+      color: #f0f0f0;
+    }
+          /* 色板颜色块 */
+        .palette-swatch {
+          aspect-ratio: 1 / 1;
+          border-radius: 6px;
+          cursor: grab;
+          border: 2px solid transparent;
+          transition: all 0.12s ease;
+          position: relative;
+        }
+        .palette-swatch:hover {
+          transform: scale(1.15);
+          z-index: 2;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        }
+        .palette-swatch:active {
+          cursor: grabbing;
+          transform: scale(1.05);
+        }
+        .palette-swatch.active {
+          border-color: #2563eb !important;
+          box-shadow: 0 0 0 2px #bfdbfe;
+        }
+        .dark .palette-swatch.active {
+          box-shadow: 0 0 0 2px #60a5fa;
+        }
+        /* 画布拖拽高亮 */
+        .canvas-container.drag-over {
+          outline: 3px dashed #6b8cff;
+          outline-offset: 5px;
+          border-radius: 14px;
+          transition: outline 0.15s;
+        }
+        /* 模式按钮激活态 */
+        .mode-btn-active {
+          background-color: white !important;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important;
+        }
+        .dark .mode-btn-active {
+          background-color: #4b5563 !important;
+        }
+        /* 分类预览条目 */
+        .text-preview-item {
+          padding: 6px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.1s ease;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          background: var(--bg-card);
+          border: 1px solid transparent;
+        }
+        .text-preview-item:hover {
+          background-color: #e0e7ff;
+          border-color: #818cf8;
+          transform: translateX(3px);
+        }
+        .dark .text-preview-item:hover {
+          background-color: #374151;
+          border-color: #6366f1;
+        }
+        .text-preview-item.active-preview {
+          background-color: #dbeafe;
+          border-color: #3b82f6;
+          font-weight: 500;
+        }
+        .dark .text-preview-item.active-preview {
+          background-color: #1e3a5f;
+          border-color: #60a5fa;
+        }
+</style>
+  <!-- 引入文案数据层 -->
+  <script src="TextData.js"></script>
+  <!-- 引入业务核心调度层 -->
+  <script src="TextCore.js"></script>
+      <!-- 引入收藏存储层 -->
+      <script src="TextStore.js"></script>
+      <!-- 引入画布基础层 -->
+      <script src="canvasBase.js"></script>
+<script src="canvasText.js"></script>     <!-- 先定义 -->
+<script src="canvasSticker.js"></script>  <!-- 后加载，完全覆盖前面的 -->
+    </head>
+<body class="min-h-screen p-3 md:p-5 antialiased">
+
+  <!-- 固定水印 (符合要求) -->
+  <div class="bistu-watermark">BISTU</div>
+
+  <!-- 顶部导航 -->
+  <header class="flex flex-wrap justify-between items-center mb-5 card-box rounded-xl p-3 md:p-4 gap-2">
+    <h1 class="text-xl md:text-2xl font-bold tracking-tight">🧠 精神状态生成器</h1>
+    <div class="flex flex-wrap gap-2">
+      <button id="themeBtn" class="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 transition text-sm md:text-base">🌓 切换暗黑</button>
+      <button id="exportImgBtn" class="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition text-sm md:text-base">⬇️ 导出PNG</button>
+    </div>
+  </header>
+
+  <!-- 主布局：左 3 / 中 6 / 右 3 -->
+  <main class="grid grid-cols-1 md:grid-cols-12 gap-4">
+    <!-- 左侧：文案库 -->
+    <section id="textPanel" class="md:col-span-3 card-box rounded-xl p-4 h-fit">
+      <h2 class="text-lg font-semibold mb-3">📝 文案库</h2>
+          <div id="cateBox" class="flex flex-wrap gap-2 mb-4">
+            <button class="cate-item px-3 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm hover:bg-gray-200 transition" data-cate="gentle">🌿 治愈温柔</button>
+            <button class="cate-item px-3 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm hover:bg-gray-200 transition" data-cate="independent">💪 清醒独立</button>
+            <button class="cate-item px-3 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm hover:bg-gray-200 transition" data-cate="sad">😢 emo伤感</button>
+            <button class="cate-item px-3 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm hover:bg-gray-200 transition" data-cate="inspire">🔥 励志向上</button>
+            <button class="cate-item px-3 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm hover:bg-gray-200 transition" data-cate="literary">📖 文艺短句</button>
+            <button class="cate-item px-3 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm hover:bg-gray-200 transition" data-cate="funny">😂 搞怪沙雕</button>
+          </div>
+      <!-- 分类悬停预览（6条文案） -->
+      <div id="textPreview" class="hidden mb-3 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 max-h-48 overflow-y-auto text-sm space-y-1"></div>
+      <button id="randomTextBtn" class="w-full py-2 bg-green-400 hover:bg-green-500 rounded-lg mb-3 transition text-white font-medium">🎲 随机文案</button>
+          <textarea id="textInput" rows="3" class="w-full p-2 rounded-lg border resize-none outline-none transition mb-2" placeholder="自定义输入文案...">今天也是元气满满的一天呢</textarea>
+          <hr class="my-3 border-[var(--border-color)]">
+          <h3 class="font-medium mb-2 text-sm">📋 收藏文案</h3>
+      <div id="collectList" class="space-y-2 max-h-40 overflow-y-auto text-sm">
+        <p class="text-gray-400 text-center text-xs">点击下方文案即可收藏</p>
+      </div>
+    </section>
+
+    <!-- 中间：画布预览 -->
+    <section class="md:col-span-6 flex flex-col items-center">
+      <div class="canvas-container card-box p-3 rounded-xl w-full">
+        <canvas id="mainCanvas" width="600" height="600" class="max-w-full border rounded shadow-sm" style="aspect-ratio: 1/1; width: 100%; height: auto;"></canvas>
+      </div>
+      <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">✨ 实时预览 · 自带 BISTU 水印</p>
+    </section>
+
+    <!-- 右侧：样式面板 -->
+    <section id="stylePanel" class="md:col-span-3 card-box rounded-xl p-4 h-fit space-y-4">
+      <h2 class="text-lg font-semibold mb-1">🎨 画布调节</h2>
+      <div>
+        <p class="text-sm mb-1">📐 画布尺寸</p>
+        <select id="sizeSelect" class="w-full p-2 rounded border outline-none transition">
+          <option value="600,600">方形 600×600</option>
+          <option value="600,900">竖图 600×900</option>
+        </select>
+      </div>
+      <!-- 替换：纯色背景 + 文字颜色 → 统一拖拽色板 -->
+      <div>
+        <p class="text-sm mb-1">🎨 颜色色板 <span class="text-xs text-gray-400">(拖拽到画布应用)</span></p>
+        <!-- 模式切换 -->
+        <div class="flex gap-1 mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+          <button id="colorModeBg" class="flex-1 py-1.5 text-xs rounded-md font-medium bg-white dark:bg-gray-600 shadow-sm transition">🖌 背景色</button>
+          <button id="colorModeText" class="flex-1 py-1.5 text-xs rounded-md font-medium transition">✏️ 文字色</button>
+        </div>
+        <!-- 预设色板 (由JS填充) -->
+        <div id="colorPalette" class="grid grid-cols-6 gap-1.5 mb-2"></div>
+        <!-- 自定义颜色 -->
+        <div class="flex gap-2 items-center">
+          <label class="text-xs text-gray-500 shrink-0">🎨 自定义</label>
+          <input type="color" id="customColorPicker" value="#000000" class="flex-1 h-7 cursor-pointer rounded border">
+          <button id="applyColorBtn" class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 rounded hover:bg-blue-200 transition font-medium">应用</button>
+        </div>
+        <!-- 隐藏原有输入框（保留兼容） -->
+        <input type="color" id="bgColorInput" value="#ffffff" class="hidden">
+        <input type="color" id="fontColor" value="#000000" class="hidden">
+      </div>
+          <div>
+            <p class="text-sm mb-1">🖼️ 表情包 (点击替换)</p>
+            <!-- 表情包显示开关 -->
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-gray-400">显示表情包</span>
+              <button id="emojiToggleBtn" class="px-2 py-1 text-xs rounded-md font-medium bg-green-400 hover:bg-green-500 text-white transition">开</button>
+            </div>
+            <div id="imgList" class="grid grid-cols-3 gap-3">
+              <div class="w-full aspect-square bg-gray-200 dark:bg-gray-600 rounded-xl cursor-pointer hover:opacity-80 hover:scale-105 transition flex items-center justify-center text-4xl" data-img="emoji1">😆</div>
+              <div class="w-full aspect-square bg-gray-200 dark:bg-gray-600 rounded-xl cursor-pointer hover:opacity-80 hover:scale-105 transition flex items-center justify-center text-4xl" data-img="emoji2">🤯</div>
+              <div class="w-full aspect-square bg-gray-200 dark:bg-gray-600 rounded-xl cursor-pointer hover:opacity-80 hover:scale-105 transition flex items-center justify-center text-4xl" data-img="emoji3">🥳</div>
+            </div>
+          </div>
+          <!-- 📷 导入图片区域 -->
+          <div class="mt-2">
+            <p class="text-sm mb-1">📷 导入图片 (支持任意格式)</p>
+            <input type="file" id="imageUpload" accept="image/*" class="hidden">
+            <div class="flex gap-2">
+              <button id="importImgBtn" class="flex-1 py-2 bg-teal-400 hover:bg-teal-500 rounded-lg transition text-white text-sm font-medium">📤 选择图片</button>
+              <button id="clearImgBtn" class="px-3 py-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 rounded-lg transition text-sm">✕ 清除</button>
+            </div>
+          </div>
+          <hr class="border-[var(--border-color)]">
+          <div>
+            <p class="text-sm mb-1">🔤 字号</p>
+            <input type="range" id="fontSize" min="12" max="80" value="36" class="w-full">
+          </div>
+          <div>
+            <p class="text-sm mb-1">🖊️ 描边粗细</p>
+            <input type="range" id="strokeWidth" min="0" max="8" value="3" class="w-full">
+          </div>
+      <div class="space-y-2">
+        <button id="dragToggleBtn" class="w-full py-2 bg-purple-400 hover:bg-purple-500 rounded-lg transition text-white dark:text-white font-medium">🖱️ 拖拽文字：关</button>
+        <button id="copyTextBtn" class="w-full py-2 bg-amber-400 hover:bg-amber-500 rounded-lg transition text-white dark:text-white font-medium">📋 复制文案</button>
+        <!-- undoBtn: 改深色背景 + 白色文字，增加对比度 -->
+        <button id="undoBtn" class="w-full py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition">↩️ 撤销修改</button>
+        <button id="resetCanvasBtn" class="w-full py-2 bg-red-400 hover:bg-red-500 rounded-lg transition text-white dark:text-white font-medium">🔄 重置画布</button>
+      </div>
+    </section>
+  </main>
+
+      <script>
+        (function(){
+          // 初始化画布基础层（负责尺寸管理、背景色）
+          CanvasBase.initCanvas('mainCanvas');
+
+          // ---------- DOM refs ----------
+          const canvas = CanvasBase.getCanvas();
+          const ctx = CanvasBase.getCtx();
+          const textInput = document.getElementById('textInput');
+          const fontSizeRange = document.getElementById('fontSize');
+          const fontColorInput = document.getElementById('fontColor');
+          const bgColorInput = document.getElementById('bgColorInput');
+          const strokeWidthRange = document.getElementById('strokeWidth');
+          const sizeSelect = document.getElementById('sizeSelect');
+          const themeBtn = document.getElementById('themeBtn');
+          const exportBtn = document.getElementById('exportImgBtn');
+          const randomTextBtn = document.getElementById('randomTextBtn');
+          const collectList = document.getElementById('collectList');
+          const copyTextBtn = document.getElementById('copyTextBtn');
+          const undoBtn = document.getElementById('undoBtn');
+          const resetCanvasBtn = document.getElementById('resetCanvasBtn');
+          const emojiToggleBtn = document.getElementById('emojiToggleBtn');
+
+          // 画布状态 (用于撤销)
+          let historyStack = [];
+          const MAX_HISTORY = 8;
+
+          // 文案收藏 — 通过 textStore 管理
+          let collected = textStore.getFavorites();
+
+          // 文字拖拽相关
+          let textOffsetX = 0;
+          let textOffsetY = 0;
+          let isDragMode = false;
+          let isDragging = false;
+          let dragStartX = 0;
+          let dragStartY = 0;
+
+              // ========== 拖拽色板功能 ==========
+              const PRESET_COLORS = [
+                '#FFFFFF', '#F0F0F0', '#D0D0D0', '#A0A0A0', '#707070', '#404040',
+                '#FF4757', '#FF6B81', '#FFA502', '#FFD93D', '#2ED573', '#1E90FF',
+                '#C0392B', '#D35400', '#F39C12', '#27AE60', '#2980B9', '#8E44AD',
+                '#FFEAA7', '#FAB1A0', '#E8B4F8', '#B8E6FF', '#C8F7C5', '#FFD3B6'
+              ];
+              const colorPalette = document.getElementById('colorPalette');
+              const colorModeBg = document.getElementById('colorModeBg');
+              const colorModeText = document.getElementById('colorModeText');
+              const customColorPicker = document.getElementById('customColorPicker');
+              const applyColorBtn = document.getElementById('applyColorBtn');
+              const canvasContainer = document.querySelector('.canvas-container');
+              let colorMode = 'bg'; // 'bg' | 'text'
+
+              // 根据模式应用颜色
+              function applyColor(color) {
+                if (colorMode === 'bg') {
+                  CanvasBase.setBgColor(color);
+                  bgColorInput.value = color;
+                } else {
+                  fontColorInput.value = color;
+                  CanvasText.setTextConfig({ fillColor: color });
+                }
+                // 更新高亮
+                document.querySelectorAll('.palette-swatch').forEach(s => {
+                  s.classList.toggle('active', s.dataset.color === color);
+                });
+                renderCanvas();
+              }
+
+              // 填充预设色板
+              PRESET_COLORS.forEach(color => {
+                const swatch = document.createElement('div');
+                swatch.className = 'palette-swatch';
+                swatch.style.backgroundColor = color;
+                if (color === '#FFFFFF') swatch.style.borderColor = '#d0d0d0';
+                swatch.dataset.color = color;
+                swatch.setAttribute('draggable', 'true');
+
+                // 点击应用
+                swatch.addEventListener('click', () => applyColor(color));
+
+                // 拖拽事件
+                swatch.addEventListener('dragstart', e => {
+                  e.dataTransfer.setData('text/plain', color);
+                  e.dataTransfer.effectAllowed = 'copy';
+                });
+                colorPalette.appendChild(swatch);
+              });
+
+              // 模式切换
+              function setColorMode(mode) {
+                colorMode = mode;
+                [colorModeBg, colorModeText].forEach(b => b.classList.remove('mode-btn-active', 'bg-white', 'dark:bg-gray-600', 'shadow-sm'));
+                const active = mode === 'bg' ? colorModeBg : colorModeText;
+                active.classList.add('mode-btn-active', 'bg-white', 'dark:bg-gray-600', 'shadow-sm');
+                // 同步高亮当前色
+                const currentColor = mode === 'bg' ? bgColorInput.value : fontColorInput.value;
+                document.querySelectorAll('.palette-swatch').forEach(s => {
+                  s.classList.toggle('active', s.dataset.color === currentColor);
+                });
+              }
+              colorModeBg.addEventListener('click', () => setColorMode('bg'));
+              colorModeText.addEventListener('click', () => setColorMode('text'));
+              setColorMode('bg'); // 默认背景模式
+
+              // 自定义颜色应用
+              applyColorBtn.addEventListener('click', () => applyColor(customColorPicker.value));
+
+              // 画布作为拖拽目标
+              canvas.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                canvasContainer.classList.add('drag-over');
+              });
+              canvas.addEventListener('dragleave', () => {
+                canvasContainer.classList.remove('drag-over');
+              });
+              canvas.addEventListener('drop', e => {
+                e.preventDefault();
+                canvasContainer.classList.remove('drag-over');
+                const color = e.dataTransfer.getData('text/plain');
+                if (color) applyColor(color);
+              });
+
+              // 同步原有 color input 事件以更新色板高亮
+              bgColorInput.addEventListener('input', function() {
+                if (colorMode === 'bg') {
+                  document.querySelectorAll('.palette-swatch').forEach(s => {
+                    s.classList.toggle('active', s.dataset.color === this.value);
+                  });
+                }
+              });
+              fontColorInput.addEventListener('input', function() {
+                if (colorMode === 'text') {
+                  document.querySelectorAll('.palette-swatch').forEach(s => {
+                    s.classList.toggle('active', s.dataset.color === this.value);
+                  });
+                }
+              });
+              // ========== 色板功能结束 ==========
+
+          // ---------- 通过 CanvasText 更新配置并渲染 ----------
+          function syncTextConfig() {
+            CanvasText.setTextConfig({
+              content: textInput.value.trim() || ' ',
+              fontSize: parseInt(fontSizeRange.value, 10),
+              fillColor: fontColorInput.value,
+              strokeWidth: parseInt(strokeWidthRange.value, 10),
+              lineHeight: parseInt(fontSizeRange.value, 10) * 1.4
+            });
+          }
+
+          function renderCanvas() {
+            syncTextConfig();        // ① 触发 CanvasText.setTextConfig → canvasTextRender
+            CanvasSticker.render();  // ② 再次触发 stickerRender
+            saveHistory();
+          }
+
+          // 历史记录
+          function saveHistory() {
+            const dataUrl = canvas.toDataURL('image/png');
+            historyStack.push(dataUrl);
+            if (historyStack.length > MAX_HISTORY) historyStack.shift();
+          }
+
+          function undoLast() {
+            if (historyStack.length <= 1) return;
+            historyStack.pop();
+            const prev = historyStack[historyStack.length - 1];
+            if (!prev) return;
+            const img = new Image();
+            img.onload = function() {
+              CanvasBase.clearAll();
+              ctx.drawImage(img, 0, 0);
+            };
+            img.src = prev;
+          }
+
+          // 重置画布
+          function resetCanvas() {
+            historyStack = [];
+            bgColorInput.value = '#ffffff';
+            CanvasBase.setBgColor('#ffffff');
+            CanvasBase.setSize('square');
+            sizeSelect.value = '600,600';
+            fontColorInput.value = '#000000';
+            fontSizeRange.value = '36';
+            strokeWidthRange.value = '3';
+            textInput.value = '今天也是元气满满的一天呢';
+            CanvasText.setEmoji('😆');
+            if (!CanvasText.getEmojiVisible()) {
+              CanvasText.setEmojiVisible(true);
+              emojiToggleBtn.innerText = '开';
+              emojiToggleBtn.classList.remove('bg-red-400', 'hover:bg-red-500');
+              emojiToggleBtn.classList.add('bg-green-400', 'hover:bg-green-500');
+            }
+            CanvasText.clearImportedImage();  // 重置时清除导入图片
+            textOffsetX = 0;
+            textOffsetY = 0;
+            renderCanvas();
+          }
+
+          // 更新画布尺寸
+          function updateCanvasSize() {
+            const val = sizeSelect.value;
+            if (val === '600,600') CanvasBase.setSize('square');
+            else CanvasBase.setSize('vertical');
+            renderCanvas();
+          }
+
+          // ---------- 事件绑定 ----------
+          textInput.addEventListener('input', renderCanvas);
+          fontSizeRange.addEventListener('input', renderCanvas);
+          fontColorInput.addEventListener('input', renderCanvas);
+          bgColorInput.addEventListener('input', function() {
+            CanvasBase.setBgColor(bgColorInput.value);
+            renderCanvas();
+          });
+          strokeWidthRange.addEventListener('input', renderCanvas);
+          sizeSelect.addEventListener('change', updateCanvasSize);
+
+          // 表情包选择
+          document.querySelectorAll('#imgList div').forEach(el => {
+            el.addEventListener('click', function() {
+              const emoji = this.innerText.trim();
+              if (emoji) {
+                CanvasText.setEmoji(emoji);
+                renderCanvas();
+              }
+            });
+          });
+
+          // 表情包开关
+          emojiToggleBtn.addEventListener('click', function() {
+            const newState = !CanvasText.getEmojiVisible();
+            CanvasText.setEmojiVisible(newState);
+            this.innerText = newState ? '开' : '关';
+            this.classList.toggle('bg-green-400', newState);
+            this.classList.toggle('bg-red-400', !newState);
+            this.classList.toggle('hover:bg-green-500', newState);
+            this.classList.toggle('hover:bg-red-500', !newState);
+          });
+
+              // ========== 导入图片功能 ==========
+              const imageUpload = document.getElementById('imageUpload');
+              const importImgBtn = document.getElementById('importImgBtn');
+              const clearImgBtn = document.getElementById('clearImgBtn');
+
+              importImgBtn.addEventListener('click', () => imageUpload.click());
+
+              imageUpload.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                  const img = new Image();
+                  img.onload = function() {
+                    CanvasText.setImportedImage(img);
+                    renderCanvas();
+                  };
+                  img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+              });
+
+              clearImgBtn.addEventListener('click', function() {
+                CanvasText.clearImportedImage();
+                imageUpload.value = '';
+                renderCanvas();
+              });
+              // ========== 导入图片功能结束 ==========
+
+              // 贴纸选择
+              document.querySelectorAll('#stickerBox div').forEach(el => {
+                el.addEventListener('click', function() {
+                  const sticker = this.innerText.trim();
+                  if (sticker) {
+                    // 切换逻辑：点击相同贴纸取消
+                    const prevSticker = this.classList.contains('active') ? null : sticker;
+                    document.querySelectorAll('#stickerBox div').forEach(b => b.classList.remove('active'));
+                    if (prevSticker) {
+                      CanvasSticker.setSticker(sticker);
+                      this.classList.add('active');
+                    } else {
+                      CanvasSticker.clearSticker();
+                    }
+                    renderCanvas();
+                  }
+                });
+              });
+
+          // 拖拽开关按钮
+          const dragToggleBtn = document.getElementById('dragToggleBtn');
+          dragToggleBtn.addEventListener('click', function() {
+            isDragMode = !isDragMode;
+            dragToggleBtn.innerText = isDragMode ? '🖱️ 拖拽文字：开' : '🖱️ 拖拽文字：关';
+            canvas.style.cursor = isDragMode ? 'move' : 'default';
+          });
+
+          // Canvas 鼠标事件：拖拽文字（暂不实现，保持接口）
+          canvas.addEventListener('mousedown', function(e) {
+            if (!isDragMode) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            dragStartX = (e.clientX - rect.left) * scaleX;
+            dragStartY = (e.clientY - rect.top) * scaleY;
+            isDragging = true;
+          });
+
+          canvas.addEventListener('mousemove', function(e) {
+            if (!isDragging || !isDragMode) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            textOffsetX += mouseX - dragStartX;
+            textOffsetY += mouseY - dragStartY;
+            dragStartX = mouseX;
+            dragStartY = mouseY;
+            // 拖拽模式不触发CanvasText重绘，保持简单
+            // 实际项目中可以扩展CanvasText支持offset
+            renderCanvas();
+          });
+
+          canvas.addEventListener('mouseup', function() { isDragging = false; });
+          canvas.addEventListener('mouseleave', function() { isDragging = false; });
+
+          // 随机文案
+          randomTextBtn.addEventListener('click', function() {
+            const keys = Object.keys(textData);
+            const randCate = keys[Math.floor(Math.random() * keys.length)];
+            textCore.setCategory(randCate);
+            textInput.value = textCore.getRandomText();
+            renderCanvas();
+          });
+
+                  // ========== 分类预览功能（点击切换） ==========
+                  const textPreview = document.getElementById('textPreview');
+                  const PREVIEW_COUNT = 6;
+                  let currentCateTexts = [];
+                  let shuffledIndices = [];
+
+                  // Fisher-Yates 洗牌
+                  function shuffle(arr) {
+                    for (let i = arr.length - 1; i > 0; i--) {
+                      const j = Math.floor(Math.random() * (i + 1));
+                      [arr[i], arr[j]] = [arr[j], arr[i]];
+                    }
+                    return arr;
+                  }
+
+                  // 加载下一批随机文案
+                  function loadNextBatch() {
+                    if (shuffledIndices.length === 0) return;
+                    const batch = shuffledIndices.splice(0, PREVIEW_COUNT);
+                    batch.forEach(idx => {
+                      const t = currentCateTexts[idx];
+                      const item = document.createElement('div');
+                      item.className = 'text-preview-item';
+                      item.textContent = t;
+                      item.addEventListener('click', function() {
+                        document.querySelectorAll('.text-preview-item').forEach(el => el.classList.remove('active-preview'));
+                        this.classList.add('active-preview');
+                        textInput.value = t;
+                        renderCanvas();
+                        hidePreview();
+                      });
+                      textPreview.appendChild(item);
+                    });
+                  }
+
+                  // 显示预览列表（初始 6 条随机）
+                  function showPreview(category) {
+                    const texts = textData[category];
+                    if (!texts || texts.length === 0) return;
+                    textPreview.innerHTML = '';
+                    currentCateTexts = texts;
+                    // 建立随机顺序索引
+                    shuffledIndices = shuffle([...Array(texts.length).keys()]);
+                    if (texts.length <= PREVIEW_COUNT) {
+                      shuffledIndices = [];
+                      texts.forEach((t, idx) => {
+                        const item = document.createElement('div');
+                        item.className = 'text-preview-item';
+                        item.textContent = t;
+                        item.addEventListener('click', function() {
+                          document.querySelectorAll('.text-preview-item').forEach(el => el.classList.remove('active-preview'));
+                          this.classList.add('active-preview');
+                          textInput.value = t;
+                          renderCanvas();
+                          hidePreview();
+                        });
+                        textPreview.appendChild(item);
+                      });
+                    } else {
+                      loadNextBatch();
+                    }
+                    textPreview.classList.remove('hidden');
+                  }
+
+                  function hidePreview() {
+                    textPreview.classList.add('hidden');
+                    textPreview.innerHTML = '';
+                    currentCateTexts = [];
+                    shuffledIndices = [];
+                  }
+
+                  // 分类按钮：点击切换
+                  document.querySelectorAll('.cate-item').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                      const cate = this.dataset.cate;
+                      textCore.setCategory(cate);
+                      showPreview(cate);
+                      document.querySelectorAll('.cate-item').forEach(b => b.classList.remove('active'));
+                      this.classList.add('active');
+                    });
+                  });
+
+                  // 滚动加载更多随机文案
+                  textPreview.addEventListener('scroll', function() {
+                    if (this.scrollTop + this.clientHeight >= this.scrollHeight - 10) {
+                      loadNextBatch();
+                    }
+                  });
+
+                  // 点击其他地方隐藏预览
+                  document.addEventListener('click', function(e) {
+                    if (!e.target.closest('#textPanel') && !textPreview.classList.contains('hidden')) {
+                      hidePreview();
+                    }
+                  });
+                  // ========== 预览功能结束 ==========
+
+          // 收藏相关
+          collectList.addEventListener('click', function(e) {
+            const target = e.target;
+            if (target.tagName === 'P' && target.dataset.text) {
+              textInput.value = target.dataset.text;
+              renderCanvas();
+            }
+          });
+
+          const collectBtn = document.createElement('button');
+          collectBtn.innerText = '⭐ 收藏当前文案';
+          collectBtn.className = 'w-full py-1.5 mt-1 bg-indigo-200 hover:bg-indigo-300 rounded-lg transition text-sm';
+          textInput.parentNode.insertBefore(collectBtn, textInput.nextSibling);
+          collectBtn.addEventListener('click', function() {
+            const txt = textInput.value.trim();
+            if (!txt) return;
+            if (textStore.addFavorite(txt)) {
+              collected = textStore.getFavorites();
+              updateCollectList();
+            } else {
+              alert('已收藏过该文案');
+            }
+          });
+
+          function updateCollectList() {
+            collectList.innerHTML = '';
+            if (collected.length === 0) {
+              collectList.innerHTML = '<p class="text-gray-400 text-center text-xs">暂无收藏</p>';
+              return;
+            }
+            collected.slice().reverse().forEach(t => {
+              const p = document.createElement('p');
+              p.className = 'text-sm p-1.5 bg-gray-100 dark:bg-gray-700 rounded cursor-pointer hover:bg-gray-200 transition truncate';
+              p.dataset.text = t;
+              p.innerText = t;
+              collectList.appendChild(p);
+            });
+          }
+          updateCollectList();
+
+          // 复制文案
+          copyTextBtn.addEventListener('click', function() {
+            const txt = textInput.value;
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(txt).then(() => alert('文案已复制到剪贴板')).catch(() => {});
+            } else {
+              const ta = document.createElement('textarea');
+              ta.value = txt;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              ta.remove();
+              alert('文案已复制');
+            }
+          });
+
+          // 撤销 / 重置 / 导出 / 暗色模式
+          undoBtn.addEventListener('click', undoLast);
+          resetCanvasBtn.addEventListener('click', function() {
+            resetCanvas();
+            updateCollectList();
+          });
+          exportBtn.addEventListener('click', function() {
+            const link = document.createElement('a');
+            link.download = `精神状态_${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+          });
+          themeBtn.addEventListener('click', function() {
+            document.body.classList.toggle('dark');
+            themeBtn.innerText = document.body.classList.contains('dark') ? '☀️ 切换亮色' : '🌓 切换暗黑';
+          });
+
+          // ---------- 初始化 ----------
+          collected = textStore.getFavorites();
+          if (collected.length === 0) {
+            textStore.addFavorite(textData.gentle[0]);
+            textStore.addFavorite(textData.funny[0]);
+            collected = textStore.getFavorites();
+          }
+          updateCollectList();
+          // 初始化渲染
+          renderCanvas();
+          function addSticker(imgName, x = 20, y = 20, w = 80, h = 80) {
+            const img = new Image();
+            img.src = `./img/stickers/${imgName}`;
+            stickerList.push({ img, x, y, w, h });
+            img.onload = stickerRender;    // 依赖图片加载完成
+          }
+
+          console.log('🧠 精神状态生成器已启动 — BISTU 水印内置');
+        })();
+      </script>
+</body>
+</html>
