@@ -9,7 +9,7 @@ const textStore = {
         console.error('加载收藏失败:', e);
       }
     }
-    return []; 
+    return [];
   },
   addFavorite(text) {
     const favorites = this.init();
@@ -18,7 +18,7 @@ const textStore = {
       this.saveFavorites(favorites);
       return true;
     }
-    return false; 
+    return false;
   },
   removeFavorite(text) {
     let favorites = this.init();
@@ -28,7 +28,7 @@ const textStore = {
       this.saveFavorites(favorites);
       return true;
     }
-    return false; 
+    return false;
   },
   saveFavorites(favorites) {
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(favorites));
@@ -42,4 +42,3 @@ const textStore = {
   }
 };
 
-export default textStore;
