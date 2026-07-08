@@ -1,11 +1,11 @@
-// canvasBase.js 画布基础层 3号文件1
+// canvasBase.js 画布基础层
 const CanvasBase = (() => {
     // 全局画布变量
     let canvas, ctx;
-    // 两种尺寸：方形表情包 / 朋友圈竖图
+    // 两种尺寸：方形表情包 / 朋友圈竖图（与UI下拉选项一致）
     const sizeMap = {
         square: { w: 600, h: 600 },
-        vertical: { w: 540, h: 960 }
+        vertical: { w: 600, h: 900 }
     };
     let currentSizeType = "square";
     let bgColor = "#ffffff";
@@ -68,8 +68,3 @@ const CanvasBase = (() => {
         getSize: () => sizeMap[currentSizeType]
     }
 })();
-
-// 页面加载自动初始化画布
-window.addEventListener("DOMContentLoaded", () => {
-    CanvasBase.initCanvas();
-})
