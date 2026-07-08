@@ -1,13 +1,11 @@
-import textData from './textData.js';
-
 const textCore = {
   currentCategory: 'gentle',
   setCategory(category) {
     if (textData[category]) {
       this.currentCategory = category;
-      return true; 
+      return true;
     }
-    return false; 
+    return false;
   },
   getRandomText() {
     const texts = textData[this.currentCategory];
@@ -25,4 +23,3 @@ const textCore = {
   }
 };
 
-export default textCore;
