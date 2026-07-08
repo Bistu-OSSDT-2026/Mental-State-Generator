@@ -1,4 +1,8 @@
-if (saved) {
+const textStore = {
+   STORAGE_KEY: 'favorite_texts',
+   init() {
+     const saved = localStorage.getItem(this.STORAGE_KEY);
+     if (saved) {
        try {
          return JSON.parse(saved);
        } catch (e) {
