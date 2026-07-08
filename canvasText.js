@@ -21,11 +21,27 @@ const CanvasText = (() => {
     let emojiVisible = true;
     // 导入的图片
     let importedImage = null;
+    // ====== 新增：文字/emoji 拖拽偏移量 ======
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
 
     // 更新文字配置（外部面板调用）
     function setTextConfig(opt) {
         textConfig = Object.assign(textConfig, opt);
         canvasTextRender();
+    }
+
+    // ====== 新增：设置拖拽偏移量 ======
+    function setDragOffset(dx, dy) {
+        dragOffsetX = dx;
+        dragOffsetY = dy;
+        canvasTextRender();
+    }
+
+    // ====== 新增：重置拖拽偏移量 ======
+    function resetDragOffset() {
+        dragOffsetX = 0;
+        dragOffsetY = 0;
     }
 
     // 设置表情包 emoji
@@ -110,6 +126,7 @@ const CanvasText = (() => {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = '#222';
+            // ====== 修改：emoji 固定位置，不跟随文字拖拽 ======
             ctx.fillText(currentEmoji, w / 2, h / 2 - 40);
         }
 
@@ -126,8 +143,8 @@ const CanvasText = (() => {
         ctx.font = `${fontSize}px ${textConfig.font}`;
 
         lines.forEach((line, idx) => {
-            const xPos = w / 2;
-            const y = startY + idx * lineHeight;
+            const xPos = w / 2 + dragOffsetX;
+            const y = startY + idx * lineHeight + dragOffsetY;
 
             if (textConfig.strokeWidth > 0) {
                 ctx.lineWidth = textConfig.strokeWidth;
@@ -150,6 +167,8 @@ const CanvasText = (() => {
         getEmojiVisible,
         setImportedImage,
         clearImportedImage,
+        setDragOffset,      // ====== 新增导出 ======
+        resetDragOffset,    // ====== 新增导出 ======
         render: canvasTextRender
     }
 })();
