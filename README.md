@@ -11,26 +11,6 @@
 - 💾 **本地存储**：文案收藏、用户配置自动保存
 - 🌓 **暗黑模式**：支持亮色/暗色主题切换
 - 📱 **响应式设计**：完美适配手机和电脑端
-
-## 📁 项目结构
-
-```
-mental-state-generator-master/
-├── Mental-State-Generator.html    # 主页面（完整功能版）
-├── Mental-State-Generator-test.html # 纯UI演示版
-├── README.md                      # 项目说明文档
-├── img/
-│   ├── backgrounds/               # 表情包底图素材
-│   └── stickers/                  # 装饰贴纸素材
-└── Js/
-    ├── canvasBase.js              # 画布基础层
-    ├── canvasText.js              # 文字渲染模块
-    ├── canvasSticker.js           # 贴纸和水印模块
-    ├── textCore.js                # 文案核心逻辑
-    ├── textData.js                # 文案数据（12大类）
-    └── textStore.js               # 本地存储收藏
-```
-
 ## 🎯 文案分类
 
 | 分类 | 说明 | 示例 |
@@ -53,22 +33,10 @@ mental-state-generator-master/
 ### 方式一：直接打开
 
 1. 下载项目到本地
-2. 双击打开 `Mental-State-Generator.html`
+2. 双击打开 https://bistu-ossdt-2026.github.io/Mental-State-Generator/
 3. 浏览器中即可使用
 
 ### 方式二：本地服务器（推荐）
-
-```bash
-# 使用 Python 启动简单服务器
-python -m http.server 8000
-
-# 使用 Node.js
-npx serve .
-
-# 使用 PHP
-php -S localhost:8000
-```
-
 然后访问 `http://localhost:8000/Mental-State-Generator.html`
 
 ## 🎮 使用教程
